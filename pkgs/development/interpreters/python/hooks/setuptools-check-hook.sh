@@ -6,7 +6,7 @@ setuptoolsCheckPhase() {
     runHook preCheck
 
     cp -f @setuppy@ nix_run_setup
-    @pythonCheckInterpreter@ nix_run_setup test
+    NIX_PYTHONPATH="$PYTHONPATH" @pythonCheckInterpreter@ nix_run_setup test
 
     runHook postCheck
     echo "Finished executing setuptoolsCheckPhase"
