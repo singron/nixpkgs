@@ -76,7 +76,8 @@ let
     # TODO: make this unconditional
   ] ++ optionals (stdenv.hostPlatform != stdenv.buildPlatform) [
     "address-model=${toString stdenv.hostPlatform.parsed.cpu.bits}"
-    "architecture=${toString stdenv.hostPlatform.parsed.cpu.family}"
+    "architecture=${if stdenv.hostPlatform.isMips then "mips1" else
+                    stdenv.hostPlatform.parsed.cpu.family}"
     "binary-format=${toString stdenv.hostPlatform.parsed.kernel.execFormat.name}"
     "target-os=${toString stdenv.hostPlatform.parsed.kernel.name}"
 
