@@ -8644,7 +8644,15 @@ in
   /* currently maintained LTS JDK */
   openjdk11 =
     if stdenv.isDarwin then
-      callPackage ../development/compilers/openjdk/darwin/11.nix { }
+      callPackage ../development/compilers/openjdk/11.nix {
+        headless = false;
+        openjfx = null;
+        gnome_vfs = null;
+        enableGnome2 = false;
+        GConf = null;
+        alsaLib = null;
+        enableJavaFX = false;
+      }
     else
       callPackage ../development/compilers/openjdk/11.nix {
         openjfx = openjfx11;

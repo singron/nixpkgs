@@ -1,8 +1,10 @@
 { stdenv, lib, fetchurl, bash, pkgconfig, autoconf, cpio, file, which, unzip
 , zip, perl, cups, freetype, alsaLib, libjpeg, giflib, libpng, zlib, lcms2
 , libX11, libICE, libXrender, libXext, libXt, libXtst, libXi, libXinerama
-, libXcursor, libXrandr, fontconfig, openjdk11-bootstrap
-, setJavaClassPath
+, libXcursor, libXrandr, fontconfig, openjdk11-bootstrap, runCommand
+, setJavaClassPath, buildEnv, libiconv
+, xcbuild
+, darwin
 , headless ? false
 , enableJavaFX ? openjfx.meta.available, openjfx
 , enableGnome2 ? true, gtk3, gnome_vfs, glib, GConf
@@ -12,6 +14,21 @@ let
   major = "11";
   update = ".0.6";
   build = "ga";
+
+  frameworks = with darwin.apple_sdk.frameworks; [
+    Foundation Kernel Cocoa JavaVM Kerberos ExceptionHandling
+  ];
+  frameworksEnv = buildEnv {
+    name = "darwin-sysroot";
+    paths = frameworks;
+    pathsToLink = [ "/Library" ];
+  };
+  darwinSysroot = runCommand "make-darwin-sysroot" {} ''
+    mkdir -p $out
+    ln -s ${frameworksEnv} $out/System
+    mkdir -p $out/usr/include
+    ln -s ${darwin.apple_sdk.frameworks.Kernel}/Library/Frameworks/Kernel.framework/Headers/mach $out/usr/include/
+  '';
 
   openjdk = stdenv.mkDerivation rec {
     pname = "openjdk" + lib.optionalString headless "-headless";
@@ -29,7 +46,9 @@ let
       libXi libXinerama libXcursor libXrandr fontconfig openjdk11-bootstrap
     ] ++ lib.optionals (!headless && enableGnome2) [
       gtk3 gnome_vfs GConf glib
-    ];
+    ] ++ lib.optionals stdenv.isDarwin (frameworks++[
+      xcbuild libiconv darwin.stubs.xattr darwin.stubs.setfile
+    ]);
 
     patches = [
       ./fix-java-home-jdk10.patch
@@ -57,13 +76,23 @@ let
       "--with-stdc++lib=dynamic"
     ] ++ lib.optional stdenv.isx86_64 "--with-jvm-features=zgc"
       ++ lib.optional headless "--enable-headless-only"
+      # openjdk build scripts try to precompile c++ headers with the c
+      # compiler, and clang on darwin won't find the c++ std headers.
+      ++ lib.optional stdenv.isDarwin ["--with-sys-root=${darwinSysroot}" "--disable-precompiled-headers"]
       ++ lib.optional (!headless && enableJavaFX) "--with-import-modules=${openjfx}";
 
     separateDebugInfo = true;
 
-    NIX_CFLAGS_COMPILE = "-Wno-error";
+    NIX_CFLAGS_COMPILE = [
+      "-Wno-error"
+    ] ++ lib.optional stdenv.isDarwin [
+      "-mmacosx-version-min=10.15"
+      # Workaround openjdk clang incompatibility e.g.:
+      # PLATFORM_API_MacOSX_Ports.cpp:612:107: error: non-constant-expression cannot be narrowed from type 'int'
+      "-Wno-c++11-narrowing"
+    ];
 
-    NIX_LDFLAGS = toString (lib.optionals (!headless) [
+    NIX_LDFLAGS = toString (lib.optionals (!headless && !stdenv.isDarwin) [
       "-lfontconfig" "-lcups" "-lXinerama" "-lXrandr" "-lmagic"
     ] ++ lib.optionals (!headless && enableGnome2) [
       "-lgtk-3" "-lgio-2.0" "-lgnomevfs-2" "-lgconf-2"
@@ -136,7 +165,7 @@ let
       license = licenses.gpl2;
       description = "The open-source Java Development Kit";
       maintainers = with maintainers; [ edwtjo ];
-      platforms = [ "i686-linux" "x86_64-linux" "aarch64-linux" "armv7l-linux" "armv6l-linux" ];
+      platforms = [ "i686-linux" "x86_64-linux" "aarch64-linux" "armv7l-linux" "armv6l-linux" "x86_64-darwin"];
     };
 
     passthru = {

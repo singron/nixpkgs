@@ -10,6 +10,7 @@ let fake = name: stdenv.lib.overrideDerivation (writeScriptBin name ''
 
 {
   setfile = fake "SetFile";
+  xattr = fake "xattr";
   rez = fake "Rez";
   derez = fake "DeRez";
 }
